@@ -1,0 +1,114 @@
+%{
+    #include<iostream>
+    #include<string>
+    #include"messenger.hpp"
+    using namespace std;
+    extern Messenger* messenger;
+    int col = 1;
+    const string keywords[11] = {"int", "void", "class", "new", "print", 
+                             "read", "return", "while", "if", "else", "this"};
+    // NOTES:
+    // A lot of the return values are just diagnostic values that are ignored
+    // byt the main program
+%}
+%option outfile ="program2_lex.cpp"
+%option noyywrap
+%option yylineno
+
+%x ERROR
+%x MCOMMENT
+
+WS      [" ""\t"]+
+WORD    [_a-zA-Z][_a-zA-Z0-9]*
+NUMBER  [0-9]+
+ONEOP   [\[\]\{\}<>!+\-*/%;,()=.]
+TWOOP   "!="|"=="|"<="|">="|"&&"|"||"
+OP      {ONEOP}|{TWOOP}
+COMMENT "//".*
+
+%%
+
+
+
+{WS} {
+    col += yyleng;
+    return 99;
+}
+
+"/*" {
+    BEGIN(MCOMMENT);
+    return 98;
+}
+
+{COMMENT} {
+    col += yyleng;
+    return 97;
+}
+
+"\n" {
+    col = 1;
+    return 96;
+}
+
+{WORD} {
+
+    messenger->line = yylineno;
+    messenger->col = col;
+    messenger->length = yyleng;
+    messenger->value = yytext;
+    messenger->isKeyword();
+    col += yyleng;
+    return 1;
+}
+
+{NUMBER} {
+    messenger->line = yylineno;
+    messenger->col = col;
+    messenger->length = yyleng;
+    messenger->value = yytext;
+    messenger->token = NUMBER;
+    col += yyleng;
+    return 2;
+}
+
+{OP} {
+    messenger->line = yylineno;
+    messenger->col = col;
+    messenger->length = yyleng;
+    messenger->value = yytext;
+    messenger->token = OPERATOR;
+    col += yyleng;
+    return 3;
+}
+
+. {
+    yyless(0);
+    BEGIN(ERROR);
+    return 90;
+}
+
+<MCOMMENT>[^*\n]* { 
+    /* Removes anything not a '*' */
+    col += yyleng;
+    return 196;
+}
+
+<MCOMMENT>"*"+[^*/\n]* {
+    /* Removes '*'s no followed by '/'s */
+    col += yyleng;
+    return 197;
+}
+
+<MCOMMENT>"\n" {
+    col = 1;
+    return 198;
+}
+
+<MCOMMENT>"*"+"/" {
+    BEGIN(INITIAL);
+    col += yyleng;
+    return 199;
+}
+
+
+%%
