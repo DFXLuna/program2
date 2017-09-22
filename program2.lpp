@@ -5,11 +5,14 @@
     using namespace std;
     extern Messenger* messenger;
     int col = 1;
+    int err = 0;
     const string keywords[11] = {"int", "void", "class", "new", "print", 
                              "read", "return", "while", "if", "else", "this"};
+    void printError(string e, int column){
+        cout << "Error '" << e << "' encountered at column " << column << endl;
+    }
     // NOTES:
-    // A lot of the return values are just diagnostic values that are ignored
-    // byt the main program
+    // Return values <= 90 are diagnostic values ignored by main program.
 %}
 %option outfile ="program2_lex.cpp"
 %option noyywrap
@@ -85,6 +88,27 @@ COMMENT "//".*
     yyless(0);
     BEGIN(ERROR);
     return 90;
+}
+
+<ERROR>.{OP} {
+    /* One character error with op, parse op */
+    string s = yytext;
+    messenger->line   = yylineno;
+    messenger->col    = col + 1; //Advancing past error character
+    messenger->length = yyleng;
+    messenger->value  = s.substr(1, string::npos);
+    messenger->token  = OPERATOR;
+    printError(s.substr(0, 1), col);
+    err += 1;
+    col += yyleng;
+    if(err > 20){ return -1; }
+    BEGIN(INITIAL);
+    return 3;
+}
+
+<ERROR>.(^{OP}{WS})+ {
+    cout << "Hit word err" << endl;
+    return 88;
 }
 
 <MCOMMENT>[^*\n]* { 
