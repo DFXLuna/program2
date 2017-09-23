@@ -6,11 +6,11 @@
     extern Messenger* messenger;
     int col = 1;
     int err = 0;
+    int errCol = 0;
+    int currentErrors = 0; // Used to stacked single character errors
+    string errString;
     const string keywords[11] = {"int", "void", "class", "new", "print", 
                              "read", "return", "while", "if", "else", "this"};
-    void printError(string e, int column){
-        cout << "Error '" << e << "' encountered at column " << column << endl;
-    }
     // NOTES:
     // Return values <= 90 are diagnostic values ignored by main program.
 %}
@@ -21,7 +21,7 @@
 %x ERROR
 %x MCOMMENT
 
-WS      [" ""\t"]+
+WS      [ \t]+
 WORD    [_a-zA-Z][_a-zA-Z0-9]*
 NUMBER  [0-9]+
 ONEOP   [\[\]\{\}<>!+\-*/%;,()=.]
@@ -54,61 +54,107 @@ COMMENT "//".*
 }
 
 {WORD} {
-
-    messenger->line = yylineno;
-    messenger->col = col;
-    messenger->length = yyleng;
-    messenger->value = yytext;
+    messenger->set(
+        yylineno,
+        col,
+        yytext,
+        IDENTIFIER
+    );
     messenger->isKeyword();
     col += yyleng;
     return 1;
 }
 
 {NUMBER} {
-    messenger->line = yylineno;
-    messenger->col = col;
-    messenger->length = yyleng;
-    messenger->value = yytext;
-    messenger->token = NUMBER;
+    messenger->set(
+        yylineno,
+        col,
+        yytext,
+        NUMBER
+    );
     col += yyleng;
     return 2;
 }
 
 {OP} {
-    messenger->line = yylineno;
-    messenger->col = col;
-    messenger->length = yyleng;
-    messenger->value = yytext;
-    messenger->token = OPERATOR;
+    messenger->set(
+        yylineno,
+        col,
+        yytext,
+        OPERATOR
+    );
     col += yyleng;
     return 3;
 }
 
 . {
-    yyless(0);
     BEGIN(ERROR);
+    // Clear error string and set error column
+    errString.clear();
+    errCol = col;
+    currentErrors = 0;
+    yyless(0);
     return 90;
 }
 
-<ERROR>.{OP} {
-    /* One character error with op, parse op */
-    string s = yytext;
-    messenger->line   = yylineno;
-    messenger->col    = col + 1; //Advancing past error character
-    messenger->length = yyleng;
-    messenger->value  = s.substr(1, string::npos);
-    messenger->token  = OPERATOR;
-    printError(s.substr(0, 1), col);
-    err += 1;
+
+<ERROR>{OP}|{WS}|"\n" {
+    // error concluded
+    // Let regular states handle this
+    yyless(0);
+    messenger->set(
+        yylineno,
+        errCol,
+        errString,
+        ERR
+    );
     col += yyleng;
-    if(err > 20){ return -1; }
     BEGIN(INITIAL);
-    return 3;
+    return 62;
 }
 
-<ERROR>.(^{OP}{WS})+ {
-    cout << "Hit word err" << endl;
-    return 88;
+<ERROR>{WORD} {
+    // error concluded
+    // Remove it and return to normal
+    // This will register two errors in strings of the form ERRwordERR
+    // But the instructions are vague enough to allow that.
+    errString.append(yytext);
+    messenger->set(
+        yylineno,
+        errCol,
+        errString,
+        ERR
+    );
+    col += yyleng;
+    BEGIN(INITIAL);
+    return 61;
+}
+
+<ERROR>. {
+    err++;
+    currentErrors++;
+    
+    // This kinda sucks but it makes the rest of the code simpler
+    // Put the second error back and reparse
+    if(currentErrors == 2){
+        yyless(0);
+        messenger->set(
+            yylineno,
+            errCol,
+            errString,
+            ERR
+        );
+        BEGIN(INITIAL);
+    }
+    else{ 
+        errString.append(yytext);
+    }
+    if(err > 20){ 
+        cout << "Too many errors" << endl;    
+        return -1;
+    }
+    col += yyleng;
+    return 60;
 }
 
 <MCOMMENT>[^*\n]* { 

@@ -9,8 +9,6 @@ using namespace std;
 Messenger* messenger = new Messenger();
 const int END = 0;
 
-
-void printHeading();
 void printRow();
 
 
@@ -19,10 +17,13 @@ int main(int argc, char* argv[]){
     yyFlexLexer f;
     int ret;
     
-    cout << "Line\tColumn\tType\tLength\tValue" << endl;
+    cout << "Line\tColumn\tToken\tLength\tValue" << endl;
     while((ret = f.yylex()) != END){
-        if(ret < 90){
-            printRow();
+        if(ret < 90 && ret > 0){
+            messenger->print();
+        }
+        else if(ret == -1){
+            return -1;
         }
     }
     
@@ -30,10 +31,3 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
-void printRow(){
-    cout << messenger->line        << "\t"
-         << messenger->col         << "\t"
-         << (int) messenger->token << "\t"
-         << messenger->length      << "\t"
-         << messenger->value       << endl;
-}
